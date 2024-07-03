@@ -8,18 +8,18 @@ class Program
 
     private class Rule {
         public int id;
-        public string a;
-        public string b;
+        public string a = "";
+        public string b = "";
     }
 
     private static bool src_is_bank_a;
 
-    private static char[] bank_a;
+    private static char[] bank_a = new char[1024*1024];
     private static int a_count;
-    private static char[] bank_b;
+    private static char[] bank_b = new char[1024*1024];
     private static int b_count;
 
-    private static List<Rule> rules;
+    private static List<Rule> rules = new List<Rule>();
     
 
     private static bool IsSpacer(char c) {
@@ -71,20 +71,19 @@ class Program
         while(a.Length > 0) {
             if(a[0] == '?') {
                 var pcap = walk(s);
-                var regID = a[0];
-                a = a.Slice(1);
+                var regID = a[1];
                 // Compare rule
                 if (registers.ContainsKey(regID)) {
-                    if (!registers[regID].AsSpan().SequenceEqual(s.Slice(1, pcap))) {
+                    if (!registers[regID].AsSpan().SequenceEqual(s.Slice(0, pcap))) {
                         return false;
                     }
                 } else {
                     registers.Add(regID, s.Slice(0, pcap).ToArray());
                 }
-
+                a = a.Slice(2);
+                s = s.Slice(pcap);
             } else {
                 if (a[0] != s[0]) {
-                    Console.WriteLine($"{a[0]} != {s[0]}");
                     return false;
                 }
                 s = s.Slice(1);
@@ -92,9 +91,8 @@ class Program
             }
 
         }
-        Console.WriteLine("Matched!");
 
-        if(s.Length != 0) {
+        if(b.Length == 0) {
             return false;
         }
 
@@ -148,16 +146,16 @@ class Program
         var s = start;
         if (s[0] == '(') {
             while(s.Length > 0) {
-                s  = s.Slice(1);
                 if (s[0] == '(') {
                     depth++;
                 }
                 if (s[0] == ')') {
-                    depth++;
+                    depth--;
                 }
                 if (depth == 0) {
                     return start.Length - s.Length;
                 }
+                s  = s.Slice(1);
             }
         }
 
@@ -170,6 +168,10 @@ class Program
 
     private static  ReadOnlySpan<char> ParseFragment(ReadOnlySpan<char> s, ref string fragment) {
         s = ConsumeWhitespace(s);
+        if (s.Length == 0) {
+            fragment = "";
+            return s;
+        }
         char c = s[0];
         if(c == ')' || (c == '<' && s[1] == '>') || (c == '>' && s[1] == '<')) {
             fragment = "";
@@ -178,10 +180,11 @@ class Program
             var cap = walk(s);
             if(c == '(') {
                 fragment = new string(s.Slice(1, cap -1));
+                return s.Slice(cap + 1);
             } else {
                 fragment = new string(s.Slice(0, cap));
+                return s.Slice(cap);
             }
-            return s.Slice(cap);
         }
     }
 
@@ -205,7 +208,6 @@ class Program
         } else {
             s = bank_b.AsSpan(0, b_count);
         }
-        Console.WriteLine("rewriting " + s.ToString());
         while(s.Length > 0) {
             current = s[0];
             if(current == '(' || IsSpacer(last)) {
@@ -230,7 +232,6 @@ class Program
                     s = ParseFragment(s, ref r.a);
                     s = ParseFragment(s, ref r.b);
                     rules.Add(r);
-                    Console.WriteLine("adding "+r.a+" --> "+r.b);
                     s = ConsumeWhitespace(s);
                     writeTail(s, r);
                     return true;
@@ -240,9 +241,7 @@ class Program
 
                 // phase apply
                 foreach(var rule in rules) {
-                    Console.WriteLine("Checking "+rule.a+" --> "+rule.b);
                     if(applyRule(rule, s)) {
-                        Console.WriteLine("Applied "+rule.id);
                         return true;
                     }
                 }
@@ -257,10 +256,6 @@ class Program
     static void Main(string[] args)
     {
 
-        bank_a = new char[1024*1024];
-        bank_b = new char[1024*1024];
-        rules = new List<Rule>();
-
         if (args.Length != 1 || (args.Length > 0 && args[0] == "-h")) {
             Console.WriteLine("Usage is ./shodal <source path>");
         }
@@ -269,24 +264,23 @@ class Program
         Console.WriteLine(args[0] + str);
         if (str.Length > bank_a.Length) {
             Console.WriteLine("Input is too long.");
+            return;
         }
         str.CopyTo(bank_a);
         a_count = str.Length;
         src_is_bank_a = true;
 
         int rw = 0;
-        do {
+
+        while (rewrite()) {
             rw++;
-            var program = "";
-            if (src_is_bank_a) {
-                program = bank_a.ToArray().AsSpan().Slice(0, a_count).ToString();
-            } else {
-                program = bank_b.ToArray().AsSpan().Slice(0, b_count).ToString();
-            }
-
-            Console.WriteLine("A: " + bank_a.ToArray().AsSpan().Slice(0, a_count).ToString());
-            Console.WriteLine("B: " + bank_b.ToArray().AsSpan().Slice(0, b_count).ToString());
-
-        } while (rewrite());
+        }
+        var program ="";
+        if (src_is_bank_a) {
+            program = bank_a.ToArray().AsSpan().Slice(0, a_count).ToString();
+        } else {
+            program = bank_b.ToArray().AsSpan().Slice(0, b_count).ToString();
+        }
+        Console.WriteLine($"Final program: '{program}'");
     }
 }
