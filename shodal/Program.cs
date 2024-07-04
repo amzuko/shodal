@@ -23,7 +23,7 @@ class Program
     
 
     private static bool IsSpacer(char c) {
-        return (Char.IsWhiteSpace(c) || c == '(' || c == ')');
+        return Char.IsWhiteSpace(c) || c == '(' || c == ')';
     }
 
     private static void WriteCharToDst(char c) {
@@ -36,31 +36,72 @@ class Program
         }
     }
 
-    private static void writeRegister(char rid, char[] reg) {
+    private static void deviceWrite(char op, Dictionary<char, char[]> registers) {
+        
+        if (registers.ContainsKey('0')) {
+            int acc = 0;
+            if(!Int32.TryParse(registers['0'], out acc)) {
+                Console.WriteLine($"Failed to parse r0: {new String(registers['0'])}");
+                return;
+            }
+            int r1 = 0;
+            if(!Int32.TryParse(registers['1'], out r1)) {
+                Console.WriteLine($"Failed to parse r1: {new String(registers['1'])}");
+                return;
+            }
+            // TODO: more ops, more registers
+            switch(op) {
+                case '+':
+                    acc += r1;
+                    break;
+                case '-':
+                    acc -= r1;
+                    break;
+                default:
+                    Console.WriteLine($"Unknown op {op}");
+                    break;
+            }
 
-
-        // TODO: special registers
-        Span<char> target;
-        if (src_is_bank_a) {
-            target = new Span<char>(bank_b, b_count, reg.Length);
-            b_count += reg.Length;
+            var res = acc.ToString();
+            foreach (char c in res) {
+                WriteCharToDst(c);
+            }
+            return;
         } else {
-            target = new Span<char>(bank_a, a_count, reg.Length);
-            a_count += reg.Length;
+            //TODO: string
         }
+    }
 
-        reg.CopyTo(target);
+    private static void writeRegister(char rid, Dictionary<char, char[]> registers) {
+        var reg = registers[rid];
+        switch(rid) {
+            case ':':
+                var s = registers[rid][0];
+                deviceWrite(s, registers);
+                break;
+            case '~':
+                var input = Console.ReadLine();
+                foreach (char c in input) {
+                    WriteCharToDst(c);
+                }
+                break;
+            default: 
+                Span<char> target;
+                if (src_is_bank_a) {
+                    target = new Span<char>(bank_b, b_count, reg.Length);
+                    b_count += reg.Length;
+                } else {
+                    target = new Span<char>(bank_a, a_count, reg.Length);
+                    a_count += reg.Length;
+                }
 
+                reg.CopyTo(target);
+                break;
+        }
     }
 
     private static bool applyRule(Rule r, ReadOnlySpan<char> s) {
-        int origin;
-
-        if (src_is_bank_a) {
-            origin = b_count;
-        } else {
-            origin = a_count;
-        }
+        // Console.WriteLine($"Trying {r.id}: {r.a}-->{r.b} to {s}");
 
         var registers = new Dictionary<char, char[]>();
 
@@ -68,9 +109,16 @@ class Program
         var b = r.b.AsSpan();
 
 
-        while(a.Length > 0) {
+        while(a.Length > 0 ) {
+            if (s.Length == 0) {
+                return false;
+            }
             if(a[0] == '?') {
                 var pcap = walk(s);
+                if (pcap == 0) {
+                    // Don't match empty strings
+                    return false;
+                }
                 var regID = a[1];
                 // Compare rule
                 if (registers.ContainsKey(regID)) {
@@ -92,16 +140,23 @@ class Program
 
         }
 
+        // Console.WriteLine("matched!");
+        // foreach(var k in registers.Keys) {
+        //     Console.WriteLine($"'{k}':'{new String(registers[k])}'");
+        // }
         if(b.Length == 0) {
             return false;
         }
+        
 
         while(b.Length > 0) {
             if (b[0] == '?') {
                 if(registers.ContainsKey(b[1])) {
-                    writeRegister(b[1], registers[b[1]]);
+                    writeRegister(b[1], registers);
                     b = b.Slice(1);
-                } 
+                }  else {
+                    WriteCharToDst(b[0]);
+                }
             } else {
                 WriteCharToDst(b[0]);
             }
@@ -112,7 +167,7 @@ class Program
         return true;
     }
 
-    private static void writeTail(ReadOnlySpan<char> s, Rule r) {
+    private static void writeTail(ReadOnlySpan<char> s, Rule? r) {
     
         Span<char> target;
         if (src_is_bank_a) {
@@ -131,7 +186,16 @@ class Program
             a_count += s.Length;
         }
 
+        if (r != null) {
+            if (src_is_bank_a) {
+                Console.WriteLine($"{r.id}: {bank_b.AsSpan().Slice(0, b_count)}");
+            } else {
+                Console.WriteLine($"{r.id}: {bank_a.AsSpan().Slice(0, a_count)}");
+            }
+        }
+
         src_is_bank_a = !src_is_bank_a;
+
     }
     
     private static ReadOnlySpan<char> ConsumeWhitespace(ReadOnlySpan<char> s) {
@@ -199,6 +263,17 @@ class Program
         return null;
     } 
 
+
+    private static string currentProgram() {
+        var program ="";
+        if (src_is_bank_a) {
+            program = bank_a.ToArray().AsSpan().Slice(0, a_count).ToString();
+        } else {
+            program = bank_b.ToArray().AsSpan().Slice(0, b_count).ToString();
+        }
+        return program;
+    }
+
     private static bool rewrite() {
         char current;
         char last = ' ';
@@ -232,12 +307,32 @@ class Program
                     s = ParseFragment(s, ref r.a);
                     s = ParseFragment(s, ref r.b);
                     rules.Add(r);
+                    Console.WriteLine($"defined {r.id}: {r.a}-->{r.b}");
                     s = ConsumeWhitespace(s);
-                    writeTail(s, r);
+                    writeTail(s, null);
+                    Console.WriteLine($"Left: {currentProgram()}");
                     return true;
                 }
-                // TODO: lambda
 
+                // phase lambda
+                if (current == '?' && s[1] == '(') {
+                    // var cap = walk(s.Slice(2));
+
+                    r = new Rule();
+                    r.id = -1;
+                    s = s.Slice(2);
+                    s = ParseFragment(s, ref r.a);
+                    s = ParseFragment(s, ref r.b);
+                    s = s.Slice(1); //trailing ')'
+                    s = ConsumeWhitespace(s);
+
+                    Console.WriteLine($"Lambda {r.a}-->{r.b}");
+                    if(!applyRule(r, s)) {
+                        Console.WriteLine($"Failed to apply lambda to '{s}'");
+                        writeTail(s, r);        
+                    }
+                    return true;
+                }
 
                 // phase apply
                 foreach(var rule in rules) {
@@ -272,15 +367,10 @@ class Program
 
         int rw = 0;
 
-        while (rewrite()) {
+        while (rewrite() && rw < 1000) {
             rw++;
         }
-        var program ="";
-        if (src_is_bank_a) {
-            program = bank_a.ToArray().AsSpan().Slice(0, a_count).ToString();
-        } else {
-            program = bank_b.ToArray().AsSpan().Slice(0, b_count).ToString();
-        }
+        var program = currentProgram();
         Console.WriteLine($"Final program: '{program}'");
     }
 }
