@@ -147,7 +147,7 @@ class Program
         if(b.Length == 0) {
             return false;
         }
-        
+
 
         while(b.Length > 0) {
             if (b[0] == '?') {
@@ -310,7 +310,6 @@ class Program
                     Console.WriteLine($"defined {r.id}: {r.a}-->{r.b}");
                     s = ConsumeWhitespace(s);
                     writeTail(s, null);
-                    Console.WriteLine($"Left: {currentProgram()}");
                     return true;
                 }
 
@@ -351,10 +350,14 @@ class Program
     static void Main(string[] args)
     {
 
-        if (args.Length != 1 || (args.Length > 0 && args[0] == "-h")) {
-            Console.WriteLine("Usage is ./shodal <source path>");
+        if (args.Length >2 || args.Length == 0 || (args.Length > 0 && args[0] == "-h")) {
+            Console.WriteLine("Usage is ./shodal <source path> (max rewrites)");
         }
         
+        var maxRetries = 100;
+        if (args.Length > 1) {
+            Int32.TryParse(args[1], out maxRetries);
+        }
         var str = File.ReadAllText(args[0]);
         Console.WriteLine(args[0] + str);
         if (str.Length > bank_a.Length) {
@@ -367,10 +370,10 @@ class Program
 
         int rw = 0;
 
-        while (rewrite() && rw < 1000) {
+        while (rewrite() && rw < maxRetries) {
             rw++;
         }
         var program = currentProgram();
-        Console.WriteLine($"Final program: '{program}'");
+        Console.WriteLine($"Final program: '{program}' after {rw} rewrites");
     }
 }
