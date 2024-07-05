@@ -1,0 +1,2 @@
+<> (if (#t) ?x ?y) ?x
+if (#t) (foo) (bar)

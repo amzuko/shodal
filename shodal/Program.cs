@@ -123,15 +123,18 @@ class Program
                 // Compare rule
                 if (registers.ContainsKey(regID)) {
                     if (!registers[regID].AsSpan().SequenceEqual(s.Slice(0, pcap))) {
+                        // Console.WriteLine($"{regID}: {registers[regID]} != {s.Slice(0, pcap)}");
                         return false;
                     }
                 } else {
+                    // Console.WriteLine($"Adding {regID}:'{s.Slice(0, pcap)}'");
                     registers.Add(regID, s.Slice(0, pcap).ToArray());
                 }
                 a = a.Slice(2);
                 s = s.Slice(pcap);
             } else {
                 if (a[0] != s[0]) {
+                    // Console.WriteLine($"{a[0]} != {s[0]}");
                     return false;
                 }
                 s = s.Slice(1);
@@ -216,10 +219,10 @@ class Program
                 if (s[0] == ')') {
                     depth--;
                 }
+                s  = s.Slice(1);
                 if (depth == 0) {
                     return start.Length - s.Length;
                 }
-                s  = s.Slice(1);
             }
         }
 
@@ -243,7 +246,8 @@ class Program
         } else {
             var cap = walk(s);
             if(c == '(') {
-                fragment = new string(s.Slice(1, cap -1));
+                fragment = new string(s.Slice(1, cap -2));
+                // Console.WriteLine($"c is ( so '{fragment}', '{ s.Slice(cap + 1)}'");
                 return s.Slice(cap + 1);
             } else {
                 fragment = new string(s.Slice(0, cap));
@@ -253,6 +257,7 @@ class Program
     }
 
     private static Rule? findRule(ReadOnlySpan<char> s, int cap) {
+        //TODO
         // if (s[0] == '(') {
         //     s = s.Slice(1);
         //     cap--;
@@ -289,15 +294,12 @@ class Program
                 Rule r;
                 // TODO: undefine
                 if (current == '>' && s[1] == '<') {
-                    //phase: define
-                    s = s.Slice(2);
-                    s = ConsumeWhitespace(s);
-                    int cap = walk(s);
-                    // writeTail(s, r);
                     return true;
                 }
 
-                if (current == '<' && s[1] == '>') {
+                if (current == '<' && (s[1] == '>' || s[1] == '#')) {
+                    // Is the new rule priority first or last?
+                    var append = (s[1] == '>');
                     r = new Rule();
                     s = s.Slice(2);
 
@@ -306,7 +308,11 @@ class Program
 
                     s = ParseFragment(s, ref r.a);
                     s = ParseFragment(s, ref r.b);
-                    rules.Add(r);
+                    if (append) {
+                        rules.Add(r);
+                    } else {
+                        rules = rules.Prepend(r).ToList();
+                    }
                     Console.WriteLine($"defined {r.id}: {r.a}-->{r.b}");
                     s = ConsumeWhitespace(s);
                     writeTail(s, null);
@@ -347,13 +353,14 @@ class Program
         return false;
     }
 
+
     static void Main(string[] args)
     {
-
         if (args.Length >2 || args.Length == 0 || (args.Length > 0 && args[0] == "-h")) {
             Console.WriteLine("Usage is ./shodal <source path> (max rewrites)");
         }
-        
+
+
         var maxRetries = 100;
         if (args.Length > 1) {
             Int32.TryParse(args[1], out maxRetries);

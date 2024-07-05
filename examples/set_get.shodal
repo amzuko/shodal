@@ -1,0 +1,7 @@
+<> (haskey ?x) #f
+<> (set ?x ?y) (<# (haskey ?x) #t <# (get ?x) ?y)
+<> (if (#t) ?x ?y) ?x
+<> (if (#f) ?x ?y) ?y
+set 1 2
+if (haskey 1) (foo) (bar)
+if (haskey 2) (foo) (bar)
