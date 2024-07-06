@@ -2,13 +2,12 @@
 <> ((number ?0) `?: number ?1) (number ?:)
 <> ((number ?0) `?: (number ?1)) (number ?:)
 <> (number ?0 `?: (number ?1)) (number ?:)
-<> (fib (number 0)) (number 1)
-<> (fib (number 1)) (number 1)
-<> (((number ?x))) (number ?x)
+<> ((fib (number 0))) (number 1)
+<> ((fib (number 1))) (number 1)
 <> (haskey ?x) #f
 <> (if (#t) ?x ?y) ?x
 <> (if (#f) ?x ?y) ?y
 <> (set (number ?x) (number ?y)) (<# (haskey (number ?x)) #t <# (get (number ?x)) (number ?y) number ?y)
-<> (fib (number ?x)) (if (haskey (number ?x)) (get (number ?x)) (set (number ?x) ((fib ((number ?x) `- (number 1))) `+ (fib ((number ?x) `- (number 2))))))
+<> ((fib (number ?x))) (if (haskey (number ?x)) (get (number ?x)) (set (number ?x) ((fib ((number ?x) `- (number 1))) `+ (fib ((number ?x) `- (number 2))))))
 (fib (number 10))
 
